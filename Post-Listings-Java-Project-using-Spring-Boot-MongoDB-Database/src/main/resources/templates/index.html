@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-KK94CHFLLe+nY2dmCWGMq91rCGa5gtU4mk92HdvYe+M/SXH301p5ILy+dN9+nJOZ" crossorigin="anonymous" />
+</head>
+
+<body>
+    <nav class="navbar bg-light shadow">
+    </nav>
+    <div class="container rounded shadow border border-primary mt-3 mb-3 p-3">
+        <form id="uploadForm">
+            <label for="file" class="mb-2">Select Excel File</label>
+            <input type="file" id="file" accept=".xls,.xlsx" class="form-control mb-2" required />
+            <button type="button" id="convertAndSave" class="btn btn-primary">Convert, Upload & Save</button>
+        </form>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-ENjdO4Dr2bkBIFxQpeoTz1HIcje39Wm4jDKdf19U8gI4ddQ3GYNS7NTKfAdVQSZe"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+        integrity="sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+
+function convertAndSave() {
+    let fileInput = document.getElementById('file');
+    if (fileInput.files.length === 0) {
+        alert('Please select an Excel file.');
+        return;
+    }
+    document.getElementById('convertAndSave').disabled = true;
+
+    let file = fileInput.files[0];
+
+    file.arrayBuffer().then((buffer) => {
+        let workbook = XLSX.read(buffer, { type: 'array' });
+        let sheetName = workbook.SheetNames[0];
+        let worksheet = workbook.Sheets[sheetName];
+        let jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: true });
+
+            // Identificar las columnas de actividadEconomica
+        let actividadEconomicaColumns = [];
+        let headers = Object.keys(jsonData[0]);
+        for (let i = 0; i < headers.length; i++) {
+            if (headers[i].includes('actividadEconomica')) {
+                // Agregar la columna actual y las dos columnas siguientes si existen
+                actividadEconomicaColumns.push(headers[i]);
+                if (i + 1 < headers.length) actividadEconomicaColumns.push(headers[i + 1]);
+                if (i + 2 < headers.length) actividadEconomicaColumns.push(headers[i + 2]);
+            }
+        }
+// Iterar sobre los datos para construir el array actividadEconomica
+jsonData.forEach(item => {
+    let actividadEconomica = [];
+    for (let i = 0; i < actividadEconomicaColumns.length; i++) {
+        let columnValue = item[actividadEconomicaColumns[i]];
+        if (columnValue !== null && columnValue !== undefined) {
+            actividadEconomica.push(columnValue);
+        } else {
+            actividadEconomica.push("");
+        }
+    }
+    item.actividadEconomica = actividadEconomica;
+});
+
+    
+        let rucProveedores = jsonData.map(item => item.rucProveedor);
+
+        fetch('/check-ruc-exists', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(rucProveedores)
+        })
+        .then(response => response.json())
+        .then(data => {
+            const { existentes, noExistentes, invalidos } = data;
+
+// Filtrar elementos null en invalidos
+const invalidosFiltrados = invalidos.filter(ruc => ruc !== null);
+
+if (invalidosFiltrados.length > 0) {
+    alert('Los siguientes RUCs no son válidos: ' + invalidosFiltrados.join(', '));
+    jsonData = jsonData.filter(item => !invalidos.includes(item.rucProveedor));
+}
+if (jsonData.length === 0) {
+    alert('No hay RUCs válidos para procesar.');
+    document.getElementById('convertAndSave').disabled = false;
+    return;
+}
+
+let rucCache = new Set(noExistentes);
+let datosParaPut = jsonData.filter(item => !rucCache.has(item.rucProveedor));
+
+
+if (existentes.length === 0 && noExistentes.length === 0) {
+    alert('No hay RUCs válidos para procesar.');
+    document.getElementById('convertAndSave').disabled = false;
+    return;
+}
+    if ((data.existentes !== null && data.existentes.some(e => e !== null)) && data.noExistentes.some(e => e !== null)) {   
+        sendData('/updates', 'PUT', datosParaPut);
+
+                    sendData('/inserts', 'POST', jsonData);
+                        setTimeout(function() {
+                        alert('Solicitud de inserción y actualización realizada, solo se insertaran ruc validos.');
+                        document.getElementById('convertAndSave').disabled = false;
+                    }, 10000);  
+  } 
+
+else if(data.noExistentes.some(e => e !== null)){
+ 
+                    sendData('/inserts', 'POST', jsonData);
+                    setTimeout(function() {
+                        alert('Solicitud de inserción realizada, solo se insertaran ruc validos.');
+                        document.getElementById('convertAndSave').disabled = false;
+                    }, 10000);
+}else{
+    sendData('/updates', 'PUT', jsonData);
+    setTimeout(function() {
+            alert('Solicitud de actualizacion realizada');
+            document.getElementById('convertAndSave').disabled = false;
+        }, 10000); 
+}
+})
+.catch(error => {
+    alert('Error en insertar la empresa en la base de datos, verifica el ruc por favor.'); 
+});
+
+    });
+}
+
+function sendData(endpoint, method, jsonData) {
+    fetch(endpoint, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(jsonData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json();
+        }
+    })
+    .then(data => {
+        console.log('Response data:', data);
+    })
+    .catch(error => {
+    });
+}
+
+document.getElementById('convertAndSave').addEventListener('click', convertAndSave);
+    
+    </script>
+</body>
+
+</html>

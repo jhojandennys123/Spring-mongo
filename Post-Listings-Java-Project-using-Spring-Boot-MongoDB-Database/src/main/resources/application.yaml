@@ -1,0 +1,4 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://adminpunkubiz:sy7KeYj34C1UQecoq7t0y6BO@punkubiz.czcaggvmlnq4.us-east-1.docdb.amazonaws.com:27017/punkubiz?directConnection=true&serverSelectionTimeoutMS=2000&tls=true&tlsAllowInvalidHostnames=true&retryWrites=false
