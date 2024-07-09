@@ -17,12 +17,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -66,19 +62,31 @@ public class SearchRepositoryImplementation implements EmpresaService {
 if (empresa.getExceptuadaIGV() != null && !empresa.getExceptuadaIGV().isEmpty()) {
     empresa.setExceptuadaIGV(empresa.getExceptuadaIGV().toUpperCase());
 }
+if (empresa.getNombreContacto() != null && !empresa.getNombreContacto().isEmpty()) {
+    empresa.setNombreContacto(empresa.getNombreContacto().toUpperCase());
+}
 
+if (empresa.getPuestoContacto() != null && !empresa.getPuestoContacto().isEmpty()) {
+    empresa.setPuestoContacto(empresa.getPuestoContacto().toUpperCase());
+}
 
 // Verifica si el valor de getAgenteRetencion() no es nulo ni vacío antes de convertir a mayúsculas
 if (empresa.getAgenteRetencion() != null && !empresa.getAgenteRetencion().isEmpty()) {
     empresa.setAgenteRetencion(empresa.getAgenteRetencion().toUpperCase());
 }
-                empresa.setTipoEmpresa(empresa.getTipoEmpresa().toUpperCase());
-                List<String> actividadEconomicaMayusculas = empresa.getActividadEconomica().stream()
-                .map(String::toUpperCase)
-                .collect(Collectors.toList());
-        
-        // Establecer la nueva lista convertida a mayúsculas
-        empresa.setActividadEconomica(actividadEconomicaMayusculas);
+
+if (empresa.getTipoEmpresa() != null && !empresa.getTipoEmpresa().isEmpty()) {
+    empresa.setTipoEmpresa(empresa.getTipoEmpresa().toUpperCase());
+}
+
+if (empresa.getActividadEconomica() != null && !empresa.getActividadEconomica().isEmpty()) {
+    List<String> actividadEconomicaMayusculas = empresa.getActividadEconomica().stream()
+            .map(String::toUpperCase)
+            .collect(Collectors.toList());
+    empresa.setActividadEconomica(actividadEconomicaMayusculas);
+}
+
+    
 
                 if (existingEmpresa != null) {
                     System.out.println("La empresa ya existe en la colección.");
@@ -103,27 +111,31 @@ if (empresa.getAgenteRetencion() != null && !empresa.getAgenteRetencion().isEmpt
         return texto.toUpperCase();
     }
  
-
+    private static final String API_URL = "https://api.migo.pe/api/v1/ruc";
+    private static final String API_KEY = "KheBTxvGNgGXEoLBffHHDtks9KwlGCYypI8ZxfiqlToLaD98GKFasZYAXXwL"; 
 
     public Optional<JsonNode> checkRucExists(String rucEmpresa) {
         try {
-            String apiUrl = "https://api.sunat.dev/ruc/" + rucEmpresa + "?apikey=" + apiKey;
+            String jsonParams = "{\"token\":\"" + API_KEY + "\", \"ruc\":\"" + rucEmpresa + "\"}";
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .GET().build();
+                    .uri(URI.create(API_URL))
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonParams, StandardCharsets.UTF_8))
+                    .build();
             HttpClient client = HttpClient.newHttpClient();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-    
+
             if (response.statusCode() == 200) {
                 ObjectMapper objectMapper = new ObjectMapper();
                 JsonNode rootNode = objectMapper.readTree(response.body());
-                JsonNode bodyNode = rootNode.path("body");
-    
-                if (!bodyNode.isMissingNode()) {
-                    JsonNode datosContribuyenteNode = bodyNode.path("datosContribuyente");
-                    if (!datosContribuyenteNode.isMissingNode()) {
-                        return Optional.of(datosContribuyenteNode);
-                    }
+
+                // Check the "success" field
+                JsonNode successNode = rootNode.path("success");
+                if (successNode.asBoolean()) {
+                    return Optional.of(rootNode);
+                } else {
+                    System.out.println("API response indicates failure.");
                 }
             } else {
                 System.out.println("Error en la solicitud HTTP: " + response.statusCode());
@@ -136,14 +148,13 @@ if (empresa.getAgenteRetencion() != null && !empresa.getAgenteRetencion().isEmpt
     }
 
 
-
     public void updateEmpresa(Empresa empresa, JsonNode datosContribuyenteNode) {
-        String nuevoCod = obtenerCondicion(datosContribuyenteNode.path("codDomHabido").asText());
-        String nuevo = obtenerCodigoEstado(datosContribuyenteNode.path("codEstado").asText());
-        String razonSocial = datosContribuyenteNode.path("desRazonSocial").asText();
-        String codUbigeo = datosContribuyenteNode.path("ubigeo").path("codUbigeo").asText();
-        String desDireccion = datosContribuyenteNode.path("desDireccion").asText();
-        String desDepartamento = datosContribuyenteNode.path("ubigeo").path("desDepartamento").asText();
+        String nuevoCod = obtenerCondicion(datosContribuyenteNode.path("condicion_de_domicilio").asText());
+        String nuevo = obtenerCodigoEstado(datosContribuyenteNode.path("estado_del_contribuyente").asText());
+        String razonSocial = datosContribuyenteNode.path("nombre_o_razon_social").asText();
+        String codUbigeo = datosContribuyenteNode.path("ubigeo").asText();
+        String desDireccion = datosContribuyenteNode.path("direccion_simple").asText();
+        String desDepartamento = datosContribuyenteNode.path("departamento").asText();
     
         updateEmpresaIfNotNull(empresa::setEstadoSunat, nuevo);
         updateEmpresaIfNotNull(empresa::setCondicionSunat, nuevoCod);
@@ -155,7 +166,7 @@ if (empresa.getAgenteRetencion() != null && !empresa.getAgenteRetencion().isEmpt
 
     public boolean checkAndUpdateEmpresa(Empresa empresa) {
         Optional<JsonNode> datosContribuyenteNode = checkRucExists(empresa.getRucEmpresa());
-        if (datosContribuyenteNode.isPresent()) {
+       if (datosContribuyenteNode.isPresent()) {
             updateEmpresa(empresa, datosContribuyenteNode.get());
             return true;
         }
@@ -200,7 +211,6 @@ if (empresa.getAgenteRetencion() != null && !empresa.getAgenteRetencion().isEmpt
     }
 
 
-    public static String apiKey = "G6HvzsdkOurfgwVwKQXKpRckhiM95wAcWsIyqtV5nWpH1xPNeK3Qn4Nmyx5zgqi7";
     
 
     @Override
@@ -232,11 +242,11 @@ private List<Empresa> convertToEmpresas(List<Empresadto.Request> empresaRequests
 public void replaceDocuments(List<Empresa> empresas) {
     empresas.forEach(empresa -> {
         if (empresa.getRucEmpresa() != null) {
-            boolean anyFieldNonNull = Stream.of(
+            boolean anyFieldNonNull = Stream.of(empresa.getRucAdquiriente(),empresa.getPuestoContacto(),
                     empresa.getTelefono(),
-                    empresa.getEmail(), empresa.getTipoEmpresa(), empresa.getActividadEconomica(),
+                    empresa.getEmail(), empresa.getTipoEmpresa(),
                     empresa.getAgenteRetencion(), empresa.getExceptuadaIGV(), empresa.getEsCliente(),
-                    empresa.getUsaGuia(), empresa.getModificadoPor()
+                    empresa.getUsaGuia(),empresa.getNombreContacto(), empresa.getModificadoPor()
             ).anyMatch(Objects::nonNull);
 
             if (anyFieldNonNull) {
@@ -272,6 +282,15 @@ public void replaceDocuments(List<Empresa> empresas) {
                 }
                 if (empresa.getModificadoPor() != null) {
                     update.set("modificadoPor", empresa.getModificadoPor());
+                }
+                if (empresa.getNombreContacto() != null) {
+                    update.set("nombreContacto", empresa.getNombreContacto().toUpperCase());
+                }
+                if (empresa.getRucAdquiriente() != null) {
+                    update.set("rucAdquiriente", empresa.getRucAdquiriente());
+                }
+                if (empresa.getPuestoContacto() != null) {
+                    update.set("puestoContacto", empresa.getPuestoContacto().toUpperCase());
                 }
 
                 // Obtener la fecha actual en milisegundos

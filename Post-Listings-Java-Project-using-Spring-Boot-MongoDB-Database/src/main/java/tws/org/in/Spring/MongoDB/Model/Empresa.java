@@ -32,6 +32,7 @@ public class Empresa implements Serializable {
     private ObjectId id;
     private String pais;
     private String rucEmpresa;
+    private String rucAdquiriente;
     private String condicionSunat;
     private String razonSocial;
     private String estadoSunat;
@@ -39,6 +40,8 @@ public class Empresa implements Serializable {
     private String ciudadFiscal;
     private String ubigeoFiscal;
     private String telefono;
+    private String puestoContacto;
+    private String nombreContacto;
     private String email;
     private String tipoEmpresa;
     private List<String> actividadEconomica;
@@ -46,17 +49,20 @@ public class Empresa implements Serializable {
     private String exceptuadaIGV;
     private Boolean esCliente;
         private Boolean usaGuia;
-        private Long fechaCreacion;
         private String modificadoPor;
+        private Long fechaCreacion;
         private Long fechaActualizacion;
     public Empresa(Empresadto.Request data){
         this.pais = data.getPais();
+        this.rucAdquiriente = data.getRucAdquiriente();
 this.rucEmpresa = data.getRucProveedor();
 this.razonSocial = data.getNombreProveedor();
 this.direccionFiscal = data.getDireccionProveedor();
 this.ciudadFiscal = data.getCiudadProveedor();
 this.condicionSunat = data.getCondicionSunat();
 this.ubigeoFiscal = data.getUbigeoProveedor();
+this.puestoContacto = data.getPuestoContacto();
+this.nombreContacto = data.getNombreContacto();
 this.telefono = data.getTelefono();
 this.email = data.getCorreoProveedor();
 this.tipoEmpresa = data.getTipoEmpresa();

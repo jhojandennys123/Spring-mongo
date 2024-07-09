@@ -12,7 +12,7 @@
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
-      <module name="Spring-MongoDB-Project" options="-parameters" />
+      <module name="Spring-MongoDB-Project" options="" />
     </option>
   </component>
 </project>

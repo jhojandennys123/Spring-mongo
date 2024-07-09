@@ -42,5 +42,8 @@ public class Empresadto {
         @NotBlank(message = "El estado en sunat es requerido")
         @Size(max = 2, message = "El estado de la sunat no puede tener más de 2 caracteres")
         private String estadoSunat;
+        private String nombreContacto;
+        private String rucAdquiriente;
+        private String puestoContacto;
     }
 }
